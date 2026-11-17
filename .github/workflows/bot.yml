@@ -1,0 +1,78 @@
+name: Telegram bot
+
+# Bot GitHub Actions'da 24/7 ishlaydi:
+# har bir ishga tushish ~5 soat 45 daqiqa davom etadi, keyin keyingisi darhol boshlanadi.
+# Baza (bot.db) shifrlangan holda keshda saqlanadi va keyingi ishga tushishga o'tadi.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"   # zaxira: biror sabab bilan zanjir uzilsa, 30 daqiqada qayta yonadi
+
+concurrency:
+  group: telegram-bot
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Bazani tiklash
+        uses: actions/cache/restore@v4
+        with:
+          path: bot.db.enc
+          key: botdb-${{ github.run_id }}
+          restore-keys: botdb-
+
+      - name: Bazani ochish
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: |
+          if [ ! -f bot.db.enc ] && [ -f seed.db.enc ]; then cp seed.db.enc bot.db.enc; fi
+          if [ -f bot.db.enc ]; then
+            openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BOT_TOKEN -in bot.db.enc -out bot.db
+          fi
+
+      - name: Botni ishga tushirish
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          BOT_CONFIG: ${{ vars.BOT_CONFIG }}
+          MAX_RUNTIME: "20700"
+        run: |
+          printf '%s\n' "$BOT_CONFIG" > .env
+          python bot.py
+
+      - name: Bazani shifrlash
+        if: always()
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: |
+          if [ -f bot.db ]; then
+            openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:BOT_TOKEN -in bot.db -out bot.db.enc
+          fi
+
+      - name: Bazani saqlash
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: bot.db.enc
+          key: botdb-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Keyingi ishga tushirish
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run bot.yml --ref main -R "${{ github.repository }}"
