@@ -445,11 +445,11 @@ async def admin_reply(message: Message):
 @router.message(Command("stat"), F.chat.id == ADMIN_ID)
 async def admin_stat(message: Message):
     total = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-    counted = db.execute("SELECT COUNT(*) FROM users WHERE counted=1").fetchone()[0]
+    counted = db.execute("SELECT COUNT(*) FROM joins").fetchone()[0]
     rewarded = db.execute("SELECT COUNT(*) FROM users WHERE rewarded=1").fetchone()[0]
     await message.answer(
         f"👥 Bot foydalanuvchilari: <b>{total}</b>\n"
-        f"🔗 Referal orqali kelganlar: <b>{counted}</b>\n"
+        f"🔗 Havola orqali kanalga qo'shilganlar: <b>{counted}</b>\n"
         f"🎁 Yopiq kanalga havola olganlar: <b>{rewarded}</b>"
     )
 
